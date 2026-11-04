@@ -1,0 +1,777 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="theme-color" content="#0b0a1f">
+<title>Crystal Cascade — Match 3 Puzzle</title>
+<style>
+  :root{
+    --bg1:#0b0a1f; --bg2:#141033; --bg3:#1b1440;
+    --ink:#f2f0ff; --muted:#a49ecb;
+    --glass:rgba(255,255,255,.055);
+    --line:rgba(255,255,255,.10);
+    --accent:#7c5cff;
+    --accent2:#37e8c2;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{height:100%}
+  body{
+    margin:0; color:var(--ink);
+    font-family:ui-rounded,"SF Pro Rounded",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    background:
+      radial-gradient(900px 600px at 12% -8%, #2a1f6b 0%, transparent 62%),
+      radial-gradient(800px 700px at 92% 108%, #0d4f56 0%, transparent 60%),
+      linear-gradient(160deg,var(--bg1) 0%,var(--bg2) 48%,var(--bg3) 100%);
+    background-attachment:fixed;
+    display:flex; align-items:center; justify-content:center;
+    padding:max(14px,env(safe-area-inset-top)) 14px max(14px,env(safe-area-inset-bottom));
+    min-height:100dvh; overflow-x:hidden;
+  }
+  .app{width:100%;max-width:460px;display:flex;flex-direction:column;gap:12px}
+
+  /* ---------- header ---------- */
+  .topbar{display:flex;align-items:center;justify-content:space-between;gap:10px}
+  .brand{display:flex;flex-direction:column;line-height:1.12}
+  .brand b{font-size:19px;letter-spacing:.4px;
+    background:linear-gradient(92deg,#fff 0%,#bda8ff 55%,#5ff0d0 100%);
+    -webkit-background-clip:text;background-clip:text;color:transparent;font-weight:800}
+  .brand span{font-size:11px;color:var(--muted);letter-spacing:2.1px;text-transform:uppercase;margin-top:3px}
+  .tools{display:flex;gap:7px}
+  .icon-btn{
+    width:38px;height:38px;border-radius:12px;border:1px solid var(--line);
+    background:var(--glass);color:var(--ink);cursor:pointer;font-size:15px;
+    display:grid;place-items:center;transition:transform .15s,background .2s,border-color .2s;
+  }
+  .icon-btn:hover{background:rgba(255,255,255,.11);border-color:rgba(255,255,255,.22)}
+  .icon-btn:active{transform:scale(.93)}
+
+  /* ---------- stats ---------- */
+  .stats{display:grid;grid-template-columns:1.35fr 1fr 1fr;gap:8px}
+  .stat{
+    background:var(--glass);border:1px solid var(--line);border-radius:15px;
+    padding:9px 11px;backdrop-filter:blur(12px);min-width:0;
+  }
+  .stat .k{font-size:9.5px;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);font-weight:700}
+  .stat .v{font-size:21px;font-weight:800;letter-spacing:-.4px;font-variant-numeric:tabular-nums;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .stat.score .v{background:linear-gradient(92deg,#fff,#b9a6ff);-webkit-background-clip:text;background-clip:text;color:transparent}
+  #moves.low{color:#ff7a7a}
+
+  .progress{height:6px;border-radius:99px;background:rgba(255,255,255,.09);overflow:hidden;position:relative}
+  .progress i{
+    display:block;height:100%;width:0%;border-radius:99px;
+    background:linear-gradient(90deg,var(--accent),var(--accent2));
+    box-shadow:0 0 14px rgba(124,92,255,.75);
+    transition:width .45s cubic-bezier(.3,.9,.3,1);
+  }
+  .goal{display:flex;justify-content:space-between;font-size:10.5px;color:var(--muted);letter-spacing:.4px;margin-top:-6px}
+
+  /* ---------- board ---------- */
+  .board-shell{
+    position:relative;border-radius:22px;padding:8px;
+    background:linear-gradient(180deg,rgba(255,255,255,.075),rgba(255,255,255,.02));
+    border:1px solid var(--line);
+    box-shadow:0 26px 60px -28px rgba(0,0,0,.9), inset 0 1px 0 rgba(255,255,255,.10);
+  }
+  #board{position:relative;width:100%;aspect-ratio:1/1;border-radius:15px;overflow:hidden;
+    background:
+      radial-gradient(120% 120% at 50% 0%,rgba(124,92,255,.16),transparent 62%),
+      rgba(0,0,0,.26);
+    touch-action:none;user-select:none;
+  }
+  #grid{position:absolute;inset:0;opacity:.5;
+    background-image:linear-gradient(rgba(255,255,255,.055) 1px,transparent 1px),
+                     linear-gradient(90deg,rgba(255,255,255,.055) 1px,transparent 1px);
+    background-size:calc(100%/8) calc(100%/8);
+  }
+
+  .tile{position:absolute;top:0;left:0;padding:2.5px;
+    transition:transform .19s cubic-bezier(.34,.9,.36,1);will-change:transform;z-index:2}
+  .tile.noanim{transition:none!important}
+  .gem{
+    width:100%;height:100%;position:relative;
+    transition:transform .16s ease,filter .16s ease,opacity .2s ease;
+    transform:scale(1);
+  }
+  .gem::after{
+    content:"";position:absolute;left:16%;top:12%;width:34%;height:26%;
+    background:linear-gradient(180deg,rgba(255,255,255,.85),rgba(255,255,255,0));
+    border-radius:50%;filter:blur(1px);opacity:.75;pointer-events:none;
+  }
+  .g0{background:radial-gradient(circle at 34% 26%,#ff9db5,#ff2e63 46%,#9d0b34 100%);
+      border-radius:50%;box-shadow:0 5px 12px -4px rgba(255,46,99,.85),inset 0 -3px 8px rgba(0,0,0,.45)}
+  .g1{background:radial-gradient(circle at 34% 26%,#a9f8ff,#12d5e8 44%,#076b8a 100%);
+      clip-path:polygon(50% 0,100% 50%,50% 100%,0 50%);
+      box-shadow:0 5px 12px -4px rgba(18,213,232,.8)}
+  .g2{background:radial-gradient(circle at 34% 26%,#ffe9a8,#ffb020 46%,#a25f00 100%);
+      border-radius:22%;
+      box-shadow:0 5px 12px -4px rgba(255,176,32,.8),inset 0 -3px 8px rgba(0,0,0,.42)}
+  .g3{background:radial-gradient(circle at 34% 26%,#d6c2ff,#8b5cf6 46%,#4a1fa8 100%);
+      clip-path:polygon(25% 3%,75% 3%,100% 50%,75% 97%,25% 97%,0 50%);
+      box-shadow:0 5px 12px -4px rgba(139,92,246,.85)}
+  .g4{background:radial-gradient(circle at 34% 26%,#b9ffe0,#22e08a 46%,#067a45 100%);
+      clip-path:polygon(50% 0,61% 35%,98% 35%,68% 57%,79% 93%,50% 71%,21% 93%,32% 57%,2% 35%,39% 35%);
+      box-shadow:0 5px 12px -4px rgba(34,224,138,.8)}
+
+  .tile.sel .gem{transform:scale(1.16);filter:brightness(1.35) saturate(1.15)}
+  .tile.sel .gem::before{
+    content:"";position:absolute;inset:-14%;border-radius:50%;
+    border:2px solid rgba(255,255,255,.85);opacity:.9;
+    animation:pulse 1s ease-in-out infinite;
+  }
+  @keyframes pulse{0%,100%{transform:scale(.92);opacity:.85}50%{transform:scale(1.06);opacity:.35}}
+  .tile.pop{z-index:3}
+  .tile.pop .gem{transform:scale(1.45);filter:brightness(2.1);opacity:0;
+    transition:transform .26s ease-out,opacity .26s ease-out,filter .2s ease-out}
+  .tile.spawn{opacity:0}
+  .tile.spawn.ready{opacity:1}
+
+  .float{
+    position:absolute;left:50%;top:46%;transform:translate(-50%,-50%);
+    font-weight:900;font-size:26px;letter-spacing:-.5px;pointer-events:none;z-index:9;
+    color:#fff;text-shadow:0 0 18px rgba(124,92,255,.95),0 0 40px rgba(55,232,194,.6);
+    animation:floatUp .85s cubic-bezier(.2,.9,.3,1) forwards;
+  }
+  @keyframes floatUp{
+    0%{opacity:0;transform:translate(-50%,-30%) scale(.7)}
+    22%{opacity:1;transform:translate(-50%,-55%) scale(1.1)}
+    100%{opacity:0;transform:translate(-50%,-125%) scale(1)}
+  }
+
+  /* ---------- overlay ---------- */
+  .overlay{
+    position:absolute;inset:0;border-radius:15px;z-index:20;
+    background:rgba(9,7,26,.82);backdrop-filter:blur(9px);
+    display:grid;place-items:center;text-align:center;padding:22px;
+    opacity:0;pointer-events:none;transition:opacity .28s ease;
+  }
+  .overlay.show{opacity:1;pointer-events:auto}
+  .overlay h2{margin:0 0 6px;font-size:26px;letter-spacing:-.6px}
+  .overlay p{margin:0 0 16px;color:var(--muted);font-size:13.5px;line-height:1.55}
+  .overlay .big{font-size:40px;font-weight:900;letter-spacing:-1.5px;margin:2px 0 10px;
+    background:linear-gradient(92deg,#fff,#b9a6ff 60%,#5ff0d0);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .btn{
+    border:0;cursor:pointer;font-family:inherit;font-weight:800;font-size:14.5px;
+    padding:12px 26px;border-radius:14px;color:#0a0620;
+    background:linear-gradient(92deg,#c9b8ff,#5ff0d0);
+    box-shadow:0 12px 26px -12px rgba(124,92,255,.95);
+    transition:transform .15s,box-shadow .2s;
+  }
+  .btn:active{transform:scale(.96)}
+  .btn.ghost{background:transparent;color:var(--ink);border:1px solid var(--line);box-shadow:none;font-weight:700;
+    padding:11px 20px;font-size:13px}
+
+  .hint{text-align:center;font-size:11.5px;color:var(--muted);letter-spacing:.3px;line-height:1.6}
+  .hint b{color:#cfc6ff;font-weight:700}
+  footer{text-align:center;font-size:10px;color:rgba(164,158,203,.5);letter-spacing:1.2px;text-transform:uppercase}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <div class="topbar">
+    <div class="brand">
+      <b>Crystal Cascade</b>
+      <span>Match 3 Puzzle</span>
+    </div>
+    <div class="tools">
+      <button class="icon-btn" id="btnSound" title="Sound on/off" aria-label="Toggle sound">🔊</button>
+      <button class="icon-btn" id="btnRestart" title="New game" aria-label="New game">⟳</button>
+    </div>
+  </div>
+
+  <div class="stats">
+    <div class="stat score"><div class="k">Score</div><div class="v" id="score">0</div></div>
+    <div class="stat"><div class="k">Best</div><div class="v" id="best">0</div></div>
+    <div class="stat"><div class="k">Moves</div><div class="v" id="moves">30</div></div>
+  </div>
+
+  <div class="progress"><i id="bar"></i></div>
+  <div class="goal"><span id="goalLbl">Level 1 · target 0</span><span id="progLbl">0%</span></div>
+
+  <div class="board-shell">
+    <div id="board">
+      <div id="grid"></div>
+      <div class="overlay" id="overlay">
+        <div>
+          <h2 id="ovTitle">Crystal Cascade</h2>
+          <div class="big" id="ovBig"></div>
+          <p id="ovText">Swap two neighbouring crystals to line up three or more of the same shape. Chain combos for big scores.</p>
+          <button class="btn" id="ovBtn">Start playing</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <p class="hint">Tap two neighbours to swap · or <b>swipe</b> a crystal · chains multiply your score</p>
+  <footer>100% offline · single file · no tracking</footer>
+</div>
+
+<script>
+"use strict";
+
+/* ============================================================
+   PURE LOGIC  (no DOM — safe to unit test)
+   ============================================================ */
+/*__LOGIC_START__*/
+const SIZE = 8;
+const TYPES = 5;
+
+function idx(r, c){ return r * SIZE + c; }
+
+/** Returns a Set of "r,c" keys that are part of a 3+ line.
+ *  types: 2D array of ints, -1 = empty. */
+function findMatches(types){
+  const marked = new Set();
+
+  for (let r = 0; r < SIZE; r++){
+    let run = 1;
+    for (let c = 1; c <= SIZE; c++){
+      const same = (c < SIZE) && types[r][c] !== -1 && types[r][c] === types[r][c-1];
+      if (same) { run++; }
+      else {
+        if (run >= 3) for (let k = c - run; k < c; k++) marked.add(r + "," + k);
+        run = 1;
+      }
+    }
+  }
+  for (let c = 0; c < SIZE; c++){
+    let run = 1;
+    for (let r = 1; r <= SIZE; r++){
+      const same = (r < SIZE) && types[r][c] !== -1 && types[r][c] === types[r-1][c];
+      if (same) { run++; }
+      else {
+        if (run >= 3) for (let k = r - run; k < r; k++) marked.add(k + "," + c);
+        run = 1;
+      }
+    }
+  }
+  return marked;
+}
+
+/** Collapse one column of types downward. Returns {col, filled} where filled
+ *  is how many empty slots were created at the top. */
+function collapseColumn(col){
+  const out = new Array(SIZE).fill(-1);
+  let write = SIZE - 1;
+  for (let r = SIZE - 1; r >= 0; r--){
+    if (col[r] !== -1) out[write--] = col[r];
+  }
+  return { col: out, holes: write + 1 };
+}
+
+/** True if any adjacent swap on the grid would create a match. */
+function hasAnyMove(types){
+  for (let r = 0; r < SIZE; r++){
+    for (let c = 0; c < SIZE; c++){
+      if (c + 1 < SIZE){
+        swapCells(types, r, c, r, c + 1);
+        const ok = findMatches(types).size > 0;
+        swapCells(types, r, c, r, c + 1);
+        if (ok) return true;
+      }
+      if (r + 1 < SIZE){
+        swapCells(types, r, c, r + 1, c);
+        const ok = findMatches(types).size > 0;
+        swapCells(types, r, c, r + 1, c);
+        if (ok) return true;
+      }
+    }
+  }
+  return false;
+}
+
+function swapCells(types, r1, c1, r2, c2){
+  const t = types[r1][c1];
+  types[r1][c1] = types[r2][c2];
+  types[r2][c2] = t;
+}
+/*__LOGIC_END__*/
+
+
+/* ============================================================
+   GAME STATE
+   ============================================================ */
+const boardEl   = document.getElementById('board');
+const overlayEl = document.getElementById('overlay');
+const ovTitle   = document.getElementById('ovTitle');
+const ovText    = document.getElementById('ovText');
+const ovBig     = document.getElementById('ovBig');
+const ovBtn     = document.getElementById('ovBtn');
+const scoreEl   = document.getElementById('score');
+const bestEl    = document.getElementById('best');
+const movesEl   = document.getElementById('moves');
+const barEl     = document.getElementById('bar');
+const goalLbl   = document.getElementById('goalLbl');
+const progLbl   = document.getElementById('progLbl');
+
+let grid       = [];      // SIZE*SIZE of {id,type} | null
+let nextId     = 1;
+let cellPx     = 48;
+let score      = 0;
+let best       = 0;
+let level      = 1;
+let movesLeft  = 30;
+let levelStart = 0;
+let levelTarget = 1000;
+let running    = false;
+let busy       = false;
+let selected   = null;    // {r,c}
+let soundOn    = true;
+
+const MOVE_BASE   = 30;
+const TARGET_BASE = 1000;
+const TARGET_STEP = 1100;
+
+const tiles = new Map();  // id -> element
+
+const rnd = n => Math.floor(Math.random() * n);
+const sleep = ms => new Promise(res => setTimeout(res, ms));
+const delay = ms => new Promise(res => setTimeout(res, ms));
+
+/* ---------------- geometry ---------------- */
+function measure(){
+  const w = boardEl.clientWidth || 360;
+  cellPx = w / SIZE;
+}
+function posOf(r, c){ return 'translate3d(' + (c * cellPx) + 'px,' + (r * cellPx) + 'px,0)'; }
+
+/* ---------------- board helpers ---------------- */
+function typeGrid(){
+  const t = [];
+  for (let r = 0; r < SIZE; r++){
+    const row = [];
+    for (let c = 0; c < SIZE; c++){
+      const cellObj = grid[idx(r,c)];
+      row.push(cellObj ? cellObj.type : -1);
+    }
+    t.push(row);
+  }
+  return t;
+}
+
+function makeCrystal(type){ return { id: nextId++, type }; }
+
+function fillFreshBoard(){
+  // Fill with random types, re-rolling any cell that would instantly match.
+  for (let r = 0; r < SIZE; r++){
+    for (let c = 0; c < SIZE; c++){
+      let type, guard = 0;
+      do {
+        type = rnd(TYPES);
+        guard++;
+      } while (guard < 40 && (
+        (c >= 2 && grid[idx(r,c-1)]?.type === type && grid[idx(r,c-2)]?.type === type) ||
+        (r >= 2 && grid[idx(r-1,c)]?.type === type && grid[idx(r-2,c)]?.type === type)
+      ));
+      grid[idx(r,c)] = makeCrystal(type);
+    }
+  }
+  if (!hasAnyMove(typeGrid())) fillFreshBoard();
+}
+
+/* ---------------- rendering ---------------- */
+function createTileEl(cellObj){
+  const el = document.createElement('div');
+  el.className = 'tile spawn';
+  el.dataset.id = cellObj.id;
+  el.style.width = cellPx + 'px';
+  el.style.height = cellPx + 'px';
+  const gem = document.createElement('div');
+  gem.className = 'gem g' + cellObj.type;
+  el.appendChild(gem);
+  tiles.set(cellObj.id, el);
+  return el;
+}
+
+function render(instant){
+  const seen = new Set();
+  let newOnes = [];
+
+  for (let r = 0; r < SIZE; r++){
+    for (let c = 0; c < SIZE; c++){
+      const cellObj = grid[idx(r,c)];
+      if (!cellObj) continue;
+      seen.add(cellObj.id);
+      let el = tiles.get(cellObj.id);
+      const fresh = !el;
+      if (fresh){
+        el = createTileEl(cellObj);
+        el.style.transform = posOf(-3, c);
+        boardEl.appendChild(el);
+        void el.offsetHeight;   // commit the above-board start position
+        newOnes.push(el);
+      } else {
+        el.querySelector('.gem').className = 'gem g' + cellObj.type;
+      }
+      el.style.width = cellPx + 'px';
+      el.style.height = cellPx + 'px';
+      if (instant) el.classList.add('noanim');
+      el.style.transform = posOf(r, c);
+      if (instant) { void el.offsetWidth; el.classList.remove('noanim'); }
+    }
+  }
+
+  // remove vanished tiles
+  for (const [id, el] of tiles){
+    if (!seen.has(id)){
+      el.remove();
+      tiles.delete(id);
+    }
+  }
+
+  // let spawn tiles transition in
+  if (newOnes.length){
+    requestAnimationFrame(() => {
+      newOnes.forEach(el => { el.classList.remove('spawn'); el.classList.add('ready'); });
+    });
+  }
+}
+
+function paintHud(){
+  scoreEl.textContent = score.toLocaleString();
+  bestEl.textContent  = best.toLocaleString();
+  movesEl.textContent = movesLeft;
+  movesEl.classList.toggle('low', movesLeft <= 5);
+
+  const span = Math.max(1, levelTarget - levelStart);
+  const pct  = Math.max(0, Math.min(100, ((score - levelStart) / span) * 100));
+  barEl.style.width = pct + '%';
+  goalLbl.textContent = 'Level ' + level + ' · target ' + levelTarget.toLocaleString();
+  progLbl.textContent = Math.round(pct) + '%';
+}
+
+/* ---------------- audio (tiny synth) ---------------- */
+let actx = null;
+function beep(freq, dur, type, vol){
+  if (!soundOn) return;
+  try {
+    if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)();
+    const o = actx.createOscillator(), g = actx.createGain();
+    o.type = type || 'sine';
+    o.frequency.value = freq;
+    g.gain.setValueAtTime(0.0001, actx.currentTime);
+    g.gain.exponentialRampToValueAtTime(vol || 0.06, actx.currentTime + 0.012);
+    g.gain.exponentialRampToValueAtTime(0.0001, actx.currentTime + (dur || 0.16));
+    o.connect(g).connect(actx.destination);
+    o.start(); o.stop(actx.currentTime + (dur || 0.16) + 0.02);
+  } catch(e){ /* audio optional */ }
+}
+
+/* ---------------- core loop ---------------- */
+async function resolveBoard(){
+  let chain = 0;
+
+  while (true){
+    const marked = findMatches(typeGrid());
+    if (marked.size === 0) break;
+
+    chain++;
+    const gained = Math.round(marked.size * 10 * (1 + (chain - 1) * 0.6) * (1 + (level - 1) * 0.08));
+    score += gained;
+
+    // pop animation
+    marked.forEach(key => {
+      const [r, c] = key.split(',').map(Number);
+      const cellObj = grid[idx(r,c)];
+      if (!cellObj) return;
+      const el = tiles.get(cellObj.id);
+      if (el) el.classList.add('pop');
+      grid[idx(r,c)] = null;
+    });
+
+    beep(420 + chain * 130, 0.18, 'triangle', 0.05);
+    if (chain > 1) showFloat('COMBO ×' + chain);
+    else if (marked.size >= 5) showFloat('+' + gained);
+
+    paintHud();
+    await delay(230);
+
+    // clear popped elements out of the DOM map
+    for (const [id, el] of tiles){
+      if (el.classList.contains('pop')){
+        el.remove();
+        tiles.delete(id);
+      }
+    }
+
+    // gravity + refill (identity-safe: surviving crystals keep their element)
+    rebuildColumns();
+
+    render(false);
+    await delay(200);
+  }
+
+  if (chain === 0) return;
+
+  // make sure a move exists
+  let guard = 0;
+  while (!hasAnyMove(typeGrid()) && guard++ < 8){
+    showFloat('SHUFFLE');
+    await delay(320);
+    shuffleBoard();
+    render(true);
+    await delay(160);
+    await resolveBoard();
+    return;
+  }
+}
+
+function rebuildColumns(){
+  // Collect surviving objects per column, compact to bottom, refill top with new.
+  for (let c = 0; c < SIZE; c++){
+    const survivors = [];
+    for (let r = SIZE - 1; r >= 0; r--){
+      const cellObj = grid[idx(r,c)];
+      if (cellObj) survivors.push(cellObj);
+    }
+    let write = SIZE - 1;
+    for (const obj of survivors){
+      grid[idx(write,c)] = obj;
+      write--;
+    }
+    for (let r = write; r >= 0; r--){
+      grid[idx(r,c)] = makeCrystal(rnd(TYPES));
+    }
+  }
+}
+
+function shuffleBoard(){
+  tiles.clear();
+  boardEl.querySelectorAll('.tile').forEach(el => el.remove());
+  grid = new Array(SIZE * SIZE).fill(null);
+  fillFreshBoard();
+}
+
+function showFloat(text){
+  const el = document.createElement('div');
+  el.className = 'float';
+  el.textContent = text;
+  boardEl.appendChild(el);
+  setTimeout(() => el.remove(), 900);
+}
+
+/* ---------------- moves ---------------- */
+function isAdjacent(a, b){
+  return Math.abs(a.r - b.r) + Math.abs(a.c - b.c) === 1;
+}
+
+async function trySwap(r1, c1, r2, c2){
+  if (busy || !running) return;
+  busy = true;
+  clearSelection();
+
+  const a = grid[idx(r1,c1)], b = grid[idx(r2,c2)];
+  if (!a || !b) { busy = false; return; }
+
+  grid[idx(r1,c1)] = b;
+  grid[idx(r2,c2)] = a;
+  render(false);
+  beep(300, 0.08, 'sine', 0.035);
+  await delay(190);
+
+  if (findMatches(typeGrid()).size === 0){
+    // invalid — swap back
+    grid[idx(r1,c1)] = a;
+    grid[idx(r2,c2)] = b;
+    render(false);
+    beep(180, 0.12, 'sawtooth', 0.03);
+    await delay(190);
+    busy = false;
+    return;
+  }
+
+  movesLeft--;
+  paintHud();
+  await resolveBoard();
+  busy = false;
+
+  if (movesLeft <= 0) endOfLevel();
+}
+
+async function endOfLevel(){
+  if (!running) return;
+  if (score >= levelTarget){
+    running = false;
+    ovTitle.textContent = 'Level ' + level + ' cleared!';
+    ovBig.textContent = '★';
+    ovText.innerHTML = 'Nice work — <b>' + score.toLocaleString() + '</b> points with ' + level + ' level' + (level>1?'s':'') + ' down.<br>Next target: ' + (levelTarget + TARGET_STEP).toLocaleString() + ' points.';
+    ovBtn.textContent = 'Continue to level ' + (level + 1);
+    overlayEl.classList.add('show');
+    beep(660, 0.18, 'triangle', 0.07);
+    setTimeout(() => beep(880, 0.22, 'triangle', 0.06), 120);
+  } else {
+    gameOver();
+  }
+}
+
+function startNextLevel(){
+  level++;
+  levelStart = score;
+  levelTarget = score + TARGET_STEP;
+  movesLeft = MOVE_BASE;
+  overlayEl.classList.remove('show');
+  resetBoard();
+  running = true;
+  paintHud();
+}
+
+function gameOver(){
+  running = false;
+  if (score > best){ best = score; try { localStorage.setItem('cc_best', String(best)); } catch(e){} }
+  bestEl.textContent = best.toLocaleString();
+  ovTitle.textContent = 'Out of moves';
+  ovBig.textContent = score.toLocaleString();
+  ovText.innerHTML = 'You needed <b>' + (levelTarget - score).toLocaleString() + '</b> more points for level ' + level + '.<br>Best score: <b>' + best.toLocaleString() + '</b>';
+  ovBtn.textContent = 'Play again';
+  overlayEl.classList.add('show');
+  beep(200, 0.3, 'sine', 0.06);
+}
+
+function resetBoard(){
+  tiles.forEach(el => el.remove());
+  tiles.clear();
+  boardEl.querySelectorAll('.tile').forEach(el => el.remove());
+  grid = new Array(SIZE * SIZE).fill(null);
+  measure();
+  fillFreshBoard();
+  render(true);
+}
+
+function newGame(){
+  score = 0; level = 1; movesLeft = MOVE_BASE;
+  levelStart = 0; levelTarget = TARGET_BASE;
+  selected = null; busy = false; running = true;
+  overlayEl.classList.remove('show');
+  resetBoard();
+  paintHud();
+}
+
+/* ---------------- input ---------------- */
+function clearSelection(){
+  if (selected){
+    const cellObj = grid[idx(selected.r, selected.c)];
+    if (cellObj){
+      const el = tiles.get(cellObj.id);
+      if (el) el.classList.remove('sel');
+    }
+  }
+  selected = null;
+}
+
+function cellFromEvent(e){
+  const rect = boardEl.getBoundingClientRect();
+  const x = e.clientX - rect.left;
+  const y = e.clientY - rect.top;
+  const c = Math.floor(x / cellPx);
+  const r = Math.floor(y / cellPx);
+  if (r < 0 || r >= SIZE || c < 0 || c >= SIZE) return null;
+  return { r, c };
+}
+
+let pointerStart = null;
+
+boardEl.addEventListener('pointerdown', e => {
+  if (busy || !running) return;
+  const cell = cellFromEvent(e);
+  if (!cell) return;
+  pointerStart = { cell, x: e.clientX, y: e.clientY };
+  boardEl.setPointerCapture?.(e.pointerId);
+});
+
+boardEl.addEventListener('pointerup', e => {
+  if (busy || !running || !pointerStart) return;
+  const start = pointerStart;
+  pointerStart = null;
+
+  const dx = e.clientX - start.x;
+  const dy = e.clientY - start.y;
+  const dist = Math.hypot(dx, dy);
+
+  // swipe
+  if (dist > cellPx * 0.45){
+    let dr = 0, dc = 0;
+    if (Math.abs(dx) > Math.abs(dy)) dc = dx > 0 ? 1 : -1;
+    else dr = dy > 0 ? 1 : -1;
+    const nr = start.cell.r + dr, nc = start.cell.c + dc;
+    if (nr >= 0 && nr < SIZE && nc >= 0 && nc < SIZE) trySwap(start.cell.r, start.cell.c, nr, nc);
+    return;
+  }
+
+  // tap
+  const cell = cellFromEvent(e) || start.cell;
+  if (!isAdjacent(start.cell, cell)) {
+    clearSelection();
+    const cellObj = grid[idx(cell.r, cell.c)];
+    if (cellObj){
+      selected = cell;
+      const el = tiles.get(cellObj.id);
+      if (el) el.classList.add('sel');
+      beep(520, 0.06, 'sine', 0.03);
+    }
+    return;
+  }
+  trySwap(start.cell.r, start.cell.c, cell.r, cell.c);
+});
+
+boardEl.addEventListener('pointercancel', () => { pointerStart = null; });
+
+/* ---------------- buttons ---------------- */
+ovBtn.addEventListener('click', () => {
+  const label = ovBtn.textContent.trim();
+  if (label.startsWith('Continue')) startNextLevel();
+  else if (label === 'Start playing') startGame();
+  else newGame();
+});
+
+function startGame(){
+  overlayEl.classList.remove('show');
+  running = true;
+  selected = null;
+  paintHud();
+  beep(520, 0.1, 'triangle', 0.05);
+  setTimeout(() => beep(760, 0.14, 'triangle', 0.045), 90);
+}
+
+document.getElementById('btnRestart').addEventListener('click', () => {
+  newGame();
+});
+
+const btnSound = document.getElementById('btnSound');
+btnSound.addEventListener('click', () => {
+  soundOn = !soundOn;
+  btnSound.textContent = soundOn ? '🔊' : '🔇';
+});
+
+window.addEventListener('resize', () => {
+  const prev = cellPx;
+  measure();
+  if (Math.abs(prev - cellPx) > 0.5){
+    render(true);
+  }
+});
+
+/* ---------------- boot ---------------- */
+try { best = parseInt(localStorage.getItem('cc_best') || '0', 10) || 0; } catch(e){ best = 0; }
+
+measure();
+grid = new Array(SIZE * SIZE).fill(null);
+fillFreshBoard();
+render(true);
+bestEl.textContent = best.toLocaleString();
+paintHud();
+
+// start screen
+ovTitle.textContent = 'Crystal Cascade';
+ovBig.textContent = '';
+ovText.innerHTML = 'Swap two neighbouring crystals to line up <b>three or more</b> of the same shape.<br>Chain reactions multiply your score. You have <b>30 moves</b> per level.';
+ovBtn.textContent = 'Start playing';
+overlayEl.classList.add('show');
+running = false;
+
+// expose a tiny hook for automated smoke tests
+window.__CC__ = { get grid(){ return grid; }, findMatches, typeGrid, trySwap, SIZE };
+</script>
+</body>
+</html>
